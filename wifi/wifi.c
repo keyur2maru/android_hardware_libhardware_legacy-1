@@ -146,6 +146,13 @@ static int is_primary_interface(const char *ifname)
     return 0;
 }
 
+#ifdef XIAOMI_WIFI
+extern int qmi_nv_read_wlan_mac(char** mac);
+static unsigned char wlan_addr[] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, };
+static char wcn_mac_arg[120];
+static int read_mac_ok = 0;
+#endif
+
 #ifdef SAMSUNG_WIFI
 char* get_samsung_wifi_type()
 {
@@ -282,9 +289,13 @@ int wifi_load_driver()
         snprintf(module_arg2, sizeof(module_arg2), "%s%s", DRIVER_MODULE_ARG, type == NULL ? "" : type);
     }
 
-    if (insmod(DRIVER_MODULE_PATH, module_arg2) < 0) {
+#ifdef XIAOMI_WIFI
+    if (0 == read_mac_ok)
+        read_wlan_mac_addr();
+    if (insmod(DRIVER_MODULE_PATH, wcn_mac_arg) < 0) {
 #else
     if (insmod(DRIVER_MODULE_PATH, DRIVER_MODULE_ARG) < 0) {
+ #endif
 #endif
 
 #ifdef WIFI_EXT_MODULE_NAME
@@ -1144,6 +1155,25 @@ int wifi_change_fw_path(const char *fwpath)
     close(fd);
     return ret;
 }
+
+
+#ifdef XIAOMI_WIFI
+int read_wlan_mac_addr()
+{
+    char* nv_wlan_mac = NULL;
+    ALOGV("read wlan mac addr enter.");
+    qmi_nv_read_wlan_mac(&nv_wlan_mac);
+    int i;
+    for (i=0; i<6; i++) {
+        wlan_addr[i] = nv_wlan_mac[i];
+    }
+    memset(wcn_mac_arg, 0, sizeof(wcn_mac_arg));
+    sprintf(wcn_mac_arg, "mac=0x%02x,0x%02x,0x%02x,0x%02x,0x%02x,0x%02x", wlan_addr[5], wlan_addr[4], wlan_addr[3], wlan_addr[2],wlan_addr[1],wlan_addr[0]);
+    read_mac_ok = 1;
+    ALOGV("read wlan mac addr (%s) done.", wcn_mac_arg);
+    return 0;
+}
+#endif
 
 int wifi_set_mode(int mode) {
     wifi_mode = mode;
